@@ -68,23 +68,23 @@ function omni.fluid.get_fluid_amount(subtable) --individual ingredient/result ta
 	-- does this interferre with the GCD functionallity?
 	if subtable.amount then
 		if subtable.probability then --normal style, priority over previous step
-			return omni.fluid.round_fluid((subtable.amount * subtable.probability) / sluid_contain_fluid)
+			return omni.fluid.round_fluid((subtable.amount * subtable.probability) / 10)
 		else
-			return omni.fluid.round_fluid(subtable.amount / sluid_contain_fluid) --standard
+			return omni.fluid.round_fluid((subtable.amount) / 10) --standard
 		end
 	elseif subtable.amount_min and subtable.amount_min > 0 then
 		if subtable.amount_max then
-			return omni.fluid.round_fluid((subtable.amount_max + subtable.amount_min) / (2 * sluid_contain_fluid))
+			return omni.fluid.round_fluid((subtable.amount_max + subtable.amount_min) / 20) 
 		elseif subtable.probability then
-			return omni.fluid.round_fluid(subtable.amount_min * subtable.probability)
+			return omni.fluid.round_fluid((subtable.amount_min * subtable.probability) / 10) 
 		end
 	elseif subtable.amount_min and subtable.amount_min == 0 then
 		if subtable.amount_max then
-			return omni.fluid.round_fluid(subtable.amount_max / sluid_contain_fluid)
+			return omni.fluid.round_fluid((subtable.amount_max) / 10)
 		end
 	elseif subtable.amount_max and subtable.amount_max > 0 then
 		if subtable.probability then
-			return omni.fluid.round_fluid(subtable.amount_max * subtable.probability)
+			return omni.fluid.round_fluid((subtable.amount_max * subtable.probability) / 10)
 		end
 	end
 	log("an error has occured with this ingredient, please find logs to find out why")
@@ -146,7 +146,7 @@ local function item_temperature_tab_cleanup(temp_sets)
 	return temps --override old table with new
 end
 
-local function adjust_amounts(recipe_name,mult,dif,need_adjustment)
+local function adjust_amounts(recipe_name,mult,dif,need_adjustment,fluids,primes)
 	local modMult = mult[dif]*500/need_adjustment
 	local multPrimes = omni.lib.factorize(mult[dif])
 	local addPrimes = {}
@@ -314,7 +314,7 @@ local function recipe_temperature_cleanup(recipe_temp,ingredient_name)
 					end
 					return nil
 				end
-				log("item not found")
+				--log("item: "..ingredient_name.." not found")
 			end
 		end
 	elseif recipe_temp.min --[[and not max]] then
@@ -329,7 +329,7 @@ local function recipe_temperature_cleanup(recipe_temp,ingredient_name)
 					end
 					return recipe_temp
 				end
-				log("item not found")
+				--log("item: "..ingredient_name.." not found")
 			end
 		end
 	end
@@ -398,12 +398,12 @@ function sluid_recipe_updates() --currently works with non-standardised recipes
 			for _,ingres in pairs({"ingredients","results"}) do
 				for j,ing in pairs(rec[dif][ingres]) do
 					if ing.type == "fluid" then
-						if ing.amount then
+						if ing.amount or ing.amount_max or ing.amount_min then
 							fluids[dif][ingres][j] = {name= ing.name, amount = omni.fluid.get_fluid_amount(ing)}
 							mult[dif] = omni.lib.lcm(omni.lib.lcm(sluid_contain_fluid, fluids[dif][ingres][j].amount)/fluids[dif][ingres][j].amount, mult[dif])
 							primes[dif][ingres][j] = omni.lib.factorize(fluids[dif][ingres][j].amount)
 						else --throw error
-							log("invalid fluid amount found in: "..rec.name.. " part: ".. diff.."."..ingres)
+							log("invalid fluid amount found in: "..rec.name.. " part: ".. dif.."."..ingres)
 							log(serpent.block(rec[dif][ingres]))
 						end
 					end
@@ -427,7 +427,7 @@ function sluid_recipe_updates() --currently works with non-standardised recipes
 				end
 			end
 			if need_adjustment then
-				adjust_amounts(rec.name,mult,dif,need_adjustment)
+				adjust_amounts(rec.name,mult,dif,need_adjustment,fluids,primes)
 			end
 		end
 		--fix to pick up temperatures etc
@@ -742,17 +742,20 @@ for _, boiler in pairs(data.raw.boiler) do
 	end
 	--if exists, find recipe, item and entity
 	if not forbidden_boilers[boiler.name] --[[and data.raw.fluid[boiler.fluid_box.filter] and data.raw.fluid[boiler.fluid_box.filter].heat_capacity]] and boiler.minable then
-		local rec = omni.lib.find_recipe(boiler.minable.result)
+		local rec = omni.lib.find_recipe(boiler.minable.result) or omni.lib.find_recipe(boiler.name)
 		new_boiler[#new_boiler+1] = {
 			type = "recipe-category",
 			name = "boiler-omnifluid-"..boiler.name,
 		}
+
 		if standardized_recipes[rec.name] == nil then
 			omni.lib.standardise(data.raw.recipe[rec.name])
 		end
 		--add boiler to recip list and fix minable-result list
-		fix_boilers_recipe[#fix_boilers_recipe+1] = rec.name
-		fix_boilers_item[boiler.minable.result] = true
+        if boiler.minable.result and not boiler.minable.results then
+            fix_boilers_recipe[#fix_boilers_recipe+1] = rec.name
+            fix_boilers_item[boiler.minable.result] = true
+        end
 
 		--set-up result and main product values to be the new converter
 		data.raw.recipe[rec.name].normal.results[1].name = boiler.name.."-converter"

@@ -82,7 +82,7 @@ function omni.fluid.round_fluid(nr,round)
 			end
 		end
 	end
-	return math.max(newval,10)
+	return math.max(newval,1)
 end
 
 function omni.fluid.convert_mj(value)
